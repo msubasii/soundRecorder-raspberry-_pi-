@@ -1,33 +1,72 @@
-(python-venv) lagos@lagos-desktop:~/Desktop/Projects/PythonCodes/python-venv$ pip install pyaudio
-Collecting pyaudio
-  Using cached PyAudio-0.2.14.tar.gz (47 kB)
-  Installing build dependencies ... done
-  Getting requirements to build wheel ... done
-  Preparing metadata (pyproject.toml) ... done
-Building wheels for collected packages: pyaudio
-  Building wheel for pyaudio (pyproject.toml) ... error
-  error: subprocess-exited-with-error
-  
-  × Building wheel for pyaudio (pyproject.toml) did not run successfully.
-  │ exit code: 1
-  ╰─> [14 lines of output]
-      running bdist_wheel
-      running build
-      running build_py
-      creating build/lib.linux-aarch64-cpython-312/pyaudio
-      copying src/pyaudio/__init__.py -> build/lib.linux-aarch64-cpython-312/pyaudio
-      running build_ext
-      building 'pyaudio._portaudio' extension
-      creating build/temp.linux-aarch64-cpython-312/src/pyaudio
-      aarch64-linux-gnu-gcc -fno-strict-overflow -Wsign-compare -DNDEBUG -g -O2 -Wall -fPIC -I/usr/local/include -I/usr/include -I/home/lagos/Desktop/Projects/PythonCodes/python-venv/include -I/usr/include/python3.12 -c src/pyaudio/device_api.c -o build/temp.linux-aarch64-cpython-312/src/pyaudio/device_api.o
-      src/pyaudio/device_api.c:9:10: fatal error: portaudio.h: No such file or directory
-          9 | #include "portaudio.h"
-            |          ^~~~~~~~~~~~~
-      compilation terminated.
-      error: command '/usr/bin/aarch64-linux-gnu-gcc' failed with exit code 1
-      [end of output]
-  
-  note: This error originates from a subprocess, and is likely not a problem with pip.
-  ERROR: Failed building wheel for pyaudio
-Failed to build pyaudio
-ERROR: ERROR: Failed to build installable wheels for some pyproject.toml based projects (pyaudio)
+import pyaudio
+import numpy as np
+import wave
+import time
+from tkinter import Tk, Label
+from threading import Thread, Event
+
+# Ses ayarları
+CHUNK = 1024  # Örnek başına okunan veri
+FORMAT = pyaudio.paInt16  # 16-bit ses formatı
+CHANNELS = 1  # Mono
+RATE = 44100  # Örnekleme hızı (Hz)
+DURATION = 20  # Kayıt süresi (saniye)
+WAIT_TIME = 600  # Tekrarlama süresi (saniye)
+
+def record_audio_to_wav(duration, filename, update_label_func):
+    audio = pyaudio.PyAudio()
+    stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
+    frames = []
+
+    update_label_func(text='Recording...')
+    for _ in range(0, int(RATE / CHUNK * duration)):
+        data = stream.read(CHUNK)
+        frames.append(data)
+
+    stream.stop_stream()
+    stream.close()
+    audio.terminate()
+    update_label_func(text='Recorded. Waiting...')
+
+    # Save audio data as WAV file
+    with wave.open(filename, 'wb') as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(audio.get_sample_size(FORMAT))
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(frames))
+
+def start_recording_thread(label, stop_event):
+    while not stop_event.is_set():
+        current_time = time.strftime("%Y%m%d-%H%M%S")  # Zaman damgası
+        wav_filename = f'output_{current_time}.wav'
+
+        record_audio_to_wav(DURATION, wav_filename, label.config)
+
+        for remaining in range(WAIT_TIME - DURATION, 0, -1):
+            if stop_event.is_set():
+                break
+            label.config(text=f'Next recording in {remaining} seconds...')
+            time.sleep(1)
+    label.config(text='Recording stopped.')
+
+def on_close(stop_event, root):
+    stop_event.set()
+    root.destroy()
+
+# GUI setup
+root = Tk()
+root.title("Audio Recorder")
+root.geometry("300x100")
+
+label = Label(root, text="Waiting to start...")
+label.pack(pady=20)
+
+stop_event = Event()
+thread = Thread(target=start_recording_thread, args=(label, stop_event))
+thread.start()
+
+root.protocol("WM_DELETE_WINDOW", lambda: on_close(stop_event, root))
+root.mainloop()
+
+# Wait for thread to finish before exiting
+thread.join()
