@@ -12,22 +12,26 @@ FORMAT = pyaudio.paInt16  # 16-bit ses formatı
 CHANNELS = 1  # Mono
 RATE = 44100  # Örnekleme hızı (Hz)
 
-#DENEME AMAÇLI
-DURATION = 5  # Kayıt süresi (saniye)
+"""
+DENEME AMAÇLI
+DURATION = 5  # Kayit süresi (saniye)
 WAIT_TIME = 25  # Tekrarlama süresi (saniye)
 FOLDER_DURATION = 4 * 30  # Yeni klasör için süre (saniye)
+"""
 
 #kayıt formatı
-#DURATION = 10  # Kayıt süresi (saniye)
-#WAIT_TIME = 600  # Tekrarlama süresi (saniye)
-#FOLDER_DURATION = 4 * 3600  # Yeni klasör için süre (saniye)
+DURATION = 10  # Kayıt süresi (saniye)
+WAIT_TIME = 600  # Tekrarlama süresi (saniye)
+FOLDER_DURATION = 4 * 3600  # Yeni klasör için süre (saniye)
 
+
+#Tarih ve saate göre yeni bir klasör oluşturuyor ve yolunu klasör adı için döndürüyor
 def create_folder():
-    """Tarih ve saate göre yeni bir klasör oluşturur ve yolunu döndürür."""
     folder_name = time.strftime("%Y"+"."+"%m"+"."+"%d-%H"+":"+"%M"+":"+"%S")  # Zaman damgası
     if not os.path.exists(folder_name):
         os.makedirs(folder_name)
     return folder_name
+
 
 def record_audio_to_wav(duration, filename, update_label_func):
     audio = pyaudio.PyAudio()
