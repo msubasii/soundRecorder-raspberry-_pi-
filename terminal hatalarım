@@ -1,87 +1,55 @@
-import pyaudio
-import numpy as np
-import wave
-import time
-from tkinter import Tk, Label
-from threading import Thread, Event
-import os
+import matplotlib.pyplot as plt
+from scipy.fft import fft, fftfreq
 
-# Ses ayarları
-CHUNK = 1024  # Örnek başına okunan veri
-FORMAT = pyaudio.paInt16  # 16-bit ses formatı
-CHANNELS = 1  # Mono
-RATE = 44100  # Örnekleme hızı (Hz)
-DURATION = 20  # Kayıt süresi (saniye)
-WAIT_TIME = 600  # Tekrarlama süresi (saniye)
-FOLDER_DURATION = 4 * 3600  # Yeni klasör için süre (saniye)
-
-def create_folder():
-    """Tarih ve saate göre yeni bir klasör oluşturur ve yolunu döndürür."""
-    folder_name = time.strftime("%Y%m%d-%H%M%S")  # Zaman damgası
-    if not os.path.exists(folder_name):
-        os.makedirs(folder_name)
-    return folder_name
-
-def record_audio_to_wav(duration, filename, update_label_func):
-    audio = pyaudio.PyAudio()
-    stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK)
-    frames = []
-
-    update_label_func(text='Recording...')
-    for _ in range(0, int(RATE / CHUNK * duration)):
-        data = stream.read(CHUNK)
-        frames.append(data)
-
-    stream.stop_stream()
-    stream.close()
-    audio.terminate()
-    update_label_func(text='Recorded. Waiting...')
-
-    # Save audio data as WAV file
-    with wave.open(filename, 'wb') as wf:
-        wf.setnchannels(CHANNELS)
-        wf.setsampwidth(audio.get_sample_size(FORMAT))
-        wf.setframerate(RATE)
-        wf.writeframes(b''.join(frames))
-
-def start_recording_thread(label, stop_event):
-    next_folder_time = time.time() + FOLDER_DURATION
-    current_folder = create_folder()
+def save_spectrogram(audio_data, samplerate, file_path):
+    # Compute the fast Fourier transform (FFT) of the audio signal
+    n = len(audio_data)  # Length of the signal
+    yf = fft(audio_data)
+    xf = fftfreq(n, 1 / samplerate)
     
-    while not stop_event.is_set():
-        if time.time() >= next_folder_time:
-            current_folder = create_folder()
-            next_folder_time = time.time() + FOLDER_DURATION
+    # Create a figure to hold the plot
+    plt.figure()
+    plt.plot(xf, np.abs(yf))
+    plt.title('Audio Spectrogram')
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Amplitude')
+    plt.grid(True)
+    
+    # Save the figure to a file
+    spectrogram_path = file_path.replace('.wav', '_spectrogram.png')
+    plt.savefig(spectrogram_path)
+    plt.close()  # Close the figure to free up memory
+    print(f"Spectrogram saved to {spectrogram_path}")
+
+# Modify the record_sound function to also save the spectrogram
+def record_sound():
+    file_name = "Recorded Sound {}.wav".format(datetime.now().strftime('%Y-%m-%d %H-%M-%S'))
+    file_path = os.path.join(folder_name, file_name)
+
+    print(f"Recording for {duration} seconds...")
+    try:
+        # Record audio
+        audio = sd.rec(int(duration * samplerate), samplerate=samplerate, channels=channels, dtype='int16')
+        sd.wait()  # Wait until recording is finished
+        print("Recording finished. Saving file...")
+
+        # Save as a WAV file
+        with wave.open(file_path, 'w') as wf:
+            wf.setnchannels(channels)
+            wf.setsampwidth(2)  # 2 bytes (16 bits)
+            wf.setframerate(samplerate)
+            wf.writeframes(audio.tobytes())
         
-        current_time = time.strftime("%Y%m%d-%H%M%S")  # Zaman damgası
-        wav_filename = f'{current_folder}/output_{current_time}.wav'
-        record_audio_to_wav(DURATION, wav_filename, label.config)
+        print(f"Audio saved to {file_path}")
 
-        for remaining in range(WAIT_TIME - DURATION, 0, -1):
-            if stop_event.is_set():
-                break
-            label.config(text=f'Next recording in {remaining} seconds...')
-            time.sleep(1)
-    label.config(text='Recording stopped.')
+        # Convert the audio array to a single channel by averaging if stereo
+        if channels > 1:
+            audio_mono = np.mean(audio, axis=1)
+        else:
+            audio_mono = audio
+        
+        # Save the spectrogram
+        save_spectrogram(audio_mono, samplerate, file_path)
 
-def on_close(stop_event, root):
-    stop_event.set()
-    root.destroy()
-
-# GUI setup
-root = Tk()
-root.title("Audio Recorder")
-root.geometry("300x100")
-
-label = Label(root, text="Waiting to start...")
-label.pack(pady=20)
-
-stop_event = Event()
-thread = Thread(target=start_recording_thread, args=(label, stop_event))
-thread.start()
-
-root.protocol("WM_DELETE_WINDOW", lambda: on_close(stop_event, root))
-root.mainloop()
-
-# Wait for thread to finish before exiting
-thread.join()
+    except Exception as e:
+        print(f"An error occurred: {e}")
